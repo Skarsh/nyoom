@@ -75,7 +75,8 @@ update :: proc() {
 }
 
 draw :: proc() {
-
+	gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT)
 }
 
 key_callback :: proc "c" (window: glfw.WindowHandle, key, scancode, action, mods: i32) {
