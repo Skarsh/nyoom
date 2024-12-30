@@ -1,0 +1,5 @@
+# Executable, debug symbol files, debugger
+*.exe
+*.pdb
+*.rdbg
+
