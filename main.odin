@@ -53,6 +53,56 @@ main :: proc() {
 
 	gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
+	// load shaders
+	program, shader_success := gl.load_shaders("shaders/shader.vs", "shaders/shader.fs")
+	defer gl.DeleteProgram(program)
+
+	// setup vao
+	vao: u32
+
+	gl.GenVertexArrays(1, &vao)
+	defer gl.DeleteVertexArrays(1, &vao)
+
+	gl.BindVertexArray(vao)
+
+	// setup vbo
+	
+    // odinfmt: disable
+    vertices := [?]f32 {
+         1.0,  1.0, 0.0,
+         1.0, -1.0, 0.0,
+        -1.0, -1.0, 0.0,
+        -1.0,  1.0, 0.0,
+    }
+
+    indices := [?]u32 {
+        0, 1, 3,
+        1, 2, 3,
+    }
+
+    // odinfmt: enable
+
+	vbo: u32
+	gl.GenBuffers(1, &vbo)
+	defer gl.DeleteBuffers(1, &vbo)
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices), &vertices[0], gl.STATIC_DRAW)
+
+
+	// setup ebo
+	ebo: u32
+	gl.GenBuffers(1, &ebo)
+	gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
+	gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(indices), &indices[0], gl.STATIC_DRAW)
+
+	gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 3 * size_of(f32), cast(uintptr)0)
+
+	gl.EnableVertexAttribArray(0)
+
+	// unbind the vao
+	gl.BindVertexArray(0)
+
 	init()
 
 	for !glfw.WindowShouldClose(window) && app_state.running {
@@ -60,6 +110,13 @@ main :: proc() {
 
 		update()
 		draw()
+
+		// TODO(Thomas): Move into draw procedure
+		gl.UseProgram(program)
+
+		gl.BindVertexArray(vao)
+		gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+
 
 		glfw.SwapBuffers(window)
 	}
