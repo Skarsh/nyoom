@@ -6,6 +6,36 @@ out vec4 FragColor;
 uniform vec2 resolution;
 uniform float time;
 
+#define INF 1.0 / 0.0
+
+struct Interval {
+    float min;
+    float max;
+};
+
+Interval interval() {
+    return Interval(-INF, INF);
+}
+
+Interval interval(float min, float max) {
+    return Interval(min, max);
+}
+
+float intervalSize(Interval interval) {
+    return interval.max - interval.min;
+}
+
+bool intervalContains(Interval interval, float x) {
+    return interval.min <= x && x <= interval.max;
+}
+
+bool intervalSurrounds(Interval interval, float x) {
+    return interval.min < x && x < interval.max;
+}
+
+const Interval emptyInterval = Interval(INF, -INF);
+const Interval universeInterval = Interval(-INF, INF);
+
 struct Sphere {
     vec3 center;
     float radius;
@@ -23,6 +53,10 @@ struct HitRecord {
     bool frontFace;
 };
 
+HitRecord hitRecord() {
+    return HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
+}
+
 vec3 rayAt(Ray ray, float t) {
     return ray.origin + ray.dir * t;
 }
@@ -34,7 +68,7 @@ void setFaceNormal(inout HitRecord rec, Ray ray, vec3 outwardNormal) {
     rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
 }
 
-bool hitSphere2(Sphere sphere, Ray ray, float rayTMin, float rayTMax, inout HitRecord rec) {
+bool hitSphere2(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
     vec3 oc = sphere.center - ray.origin;
     float a = dot(ray.dir, ray.dir);
     float b = -2.0 * dot(ray.dir, oc);
@@ -48,9 +82,9 @@ bool hitSphere2(Sphere sphere, Ray ray, float rayTMin, float rayTMax, inout HitR
 
     // Find the nearest root that lies in the acceptable range
     float root = (-b - sqrtd) / (2.0 * a);
-    if (root <= rayTMin || rayTMax <= root) {
+    if (!intervalSurrounds(rayInterval, root)) {
         root = (-b + sqrtd) / (2.0 * a);
-        if (root <= rayTMin || rayTMax <= root) {
+        if (!intervalSurrounds(rayInterval, root)) {
             return false;
         }
     }
@@ -93,6 +127,22 @@ float hitSphere(vec3 center, float radius, Ray ray) {
 //    }
 //}
 
+
+bool hit(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
+    HitRecord tempRec;
+    bool hitAnything = false;
+    float closestSoFar = rayInterval.max;
+
+    // iterate over all the objects here
+    if (hitSphere2(sphere, ray, interval(rayInterval.min, closestSoFar), tempRec)) {
+        hitAnything = true;
+        closestSoFar = tempRec.t;
+        rec = tempRec;
+    }
+
+    return hitAnything;
+}
+
 vec3 rayColor(Ray ray) {
     float t = hitSphere(vec3(0.0), 0.5, ray);
     if (t > 0.0) {
@@ -112,8 +162,8 @@ vec3 rayColor2(Ray ray, Sphere sphere) {
     rec.t = 0.0;
     rec.frontFace = false;
 
-    bool hit = hitSphere2(sphere, ray, 0.0, 10000.0, rec);
-    if (hit) {
+    //bool hit = hitSphere2(sphere, ray, 0.0, 10000.0, rec);
+    if (hit(sphere, ray, interval(0, INF), rec)) {
         return 0.5 * (rec.normal + vec3(1.0));
     }
 
@@ -135,6 +185,6 @@ void main() {
     Ray ray = Ray(cameraCenter, rayDir);
     Sphere sphere = Sphere(vec3(0.0), 0.5);
 
-    FragColor = vec4(rayColor(ray), 1.0);
-    //FragColor = vec4(rayColor2(ray, sphere), 1.0);
+    //FragColor = vec4(rayColor(ray), 1.0);
+    FragColor = vec4(rayColor2(ray, sphere), 1.0);
 }

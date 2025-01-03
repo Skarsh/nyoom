@@ -57,7 +57,7 @@ main :: proc() {
 	gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
 	// load shaders
-	program, shader_success := gl.load_shaders("shaders/shader.vert", "shaders/shader.frag")
+	program, shader_success := gl.load_shaders("shaders/vert.glsl", "shaders/frag.glsl")
 	defer gl.DeleteProgram(program)
 
 	// setup vao
