@@ -17,6 +17,9 @@ App_State :: struct {
 
 app_state: App_State
 
+WINDOW_WIDTH :: 1920
+WINDOW_HEIGHT :: 1080
+
 main :: proc() {
 	glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
 	glfw.WindowHint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
@@ -34,7 +37,7 @@ main :: proc() {
 
 	defer glfw.Terminate()
 
-	window := glfw.CreateWindow(512, 512, PROGRAM_NAME, nil, nil)
+	window := glfw.CreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, PROGRAM_NAME, nil, nil)
 
 	if window == nil {
 		log.error("Unable to create window")
@@ -54,7 +57,7 @@ main :: proc() {
 	gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
 	// load shaders
-	program, shader_success := gl.load_shaders("shaders/shader.vs", "shaders/shader.fs")
+	program, shader_success := gl.load_shaders("shaders/shader.vert", "shaders/shader.frag")
 	defer gl.DeleteProgram(program)
 
 	// setup vao
@@ -105,8 +108,22 @@ main :: proc() {
 
 	init()
 
+	last_time := glfw.GetTime()
+	counter := 0
 	for !glfw.WindowShouldClose(window) && app_state.running {
 		glfw.PollEvents()
+
+		time := glfw.GetTime()
+		delta_time := time - last_time
+		last_time = time
+		if counter % 100 == 0 {
+			fmt.println("delta_time: ", delta_time)
+		}
+
+		width, height := glfw.GetWindowSize(window)
+		gl.Uniform2f(gl.GetUniformLocation(program, "resolution"), f32(width), f32(height))
+		gl.Uniform1f(gl.GetUniformLocation(program, "time"), f32(time))
+
 
 		update()
 		draw()
@@ -119,6 +136,7 @@ main :: proc() {
 
 
 		glfw.SwapBuffers(window)
+		counter += 1
 	}
 
 }
