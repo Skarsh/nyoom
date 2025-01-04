@@ -22,11 +22,15 @@ Sphere :: struct {
 MAX_SPHERES :: 2
 spheres: [MAX_SPHERES]Sphere
 
-Camera :: struct {}
+Camera :: struct {
+	center: Vec3,
+}
 
 App_State :: struct {
+	window:  glfw.WindowHandle,
 	running: bool,
 	zoom:    f32,
+	camera:  Camera,
 }
 
 app_state: App_State
@@ -145,7 +149,7 @@ main :: proc() {
 	// unbind the vao
 	gl.BindVertexArray(0)
 
-	init()
+	init(window)
 
 	last_time := glfw.GetTime()
 	counter := 0
@@ -163,8 +167,14 @@ main :: proc() {
 		gl.Uniform2f(gl.GetUniformLocation(program, "u_resolution"), f32(width), f32(height))
 		gl.Uniform1f(gl.GetUniformLocation(program, "u_time"), f32(time))
 		gl.Uniform1f(gl.GetUniformLocation(program, "u_zoom"), app_state.zoom)
+		gl.Uniform3f(
+			gl.GetUniformLocation(program, "u_camera_center"),
+			app_state.camera.center.x,
+			app_state.camera.center.y,
+			app_state.camera.center.z,
+		)
 
-		update()
+		update(f32(delta_time))
 		draw()
 
 		// TODO(Thomas): Move into draw procedure
@@ -180,13 +190,21 @@ main :: proc() {
 
 }
 
-init :: proc() {
+init :: proc(window: glfw.WindowHandle) {
+	app_state.window = window
 	app_state.running = true
 	app_state.zoom = 1.0
+	app_state.camera = Camera {
+		center = Vec3{0, 0, 1},
+	}
 }
 
-update :: proc() {
-
+update :: proc(dt: f32) {
+	movement_speed: f32 = 1.0
+	movement_delta := dt * movement_speed
+	if glfw.GetKey(app_state.window, glfw.KEY_W) == glfw.PRESS {
+		app_state.camera.center.z -= movement_delta
+	}
 }
 
 draw :: proc() {
@@ -212,7 +230,7 @@ scroll_callback :: proc "c" (window: glfw.WindowHandle, x_offset, y_offset: f64)
 	min_zoom: f32 = 0.1
 	max_zoom: f32 = 10.0
 
-	app_state.zoom *= 1.0 - (f32(y_offset) * zoom_speed)
+	app_state.zoom *= 1.0 + (f32(y_offset) * zoom_speed)
 	app_state.zoom = math.clamp(app_state.zoom, min_zoom, max_zoom)
 }
 

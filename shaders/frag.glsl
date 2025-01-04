@@ -16,6 +16,7 @@ struct Sphere {
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_zoom;
+uniform vec3 u_camera_center;
 
 layout(std140) uniform SphereBlock {
     Sphere spheres[MAX_SPHERES];
@@ -23,13 +24,13 @@ layout(std140) uniform SphereBlock {
 
 
 // Returns a random real number in then interval [0, 1)
-float rand() {
-   return fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453123);
+float rand(vec2 seed) {
+   return fract(sin(dot(seed, vec2(12.9898,78.233))) * 43758.5453123);
 }
 
 // Returns a random real number in the interval [min, max)
-float rand(float min, float max) {
-    return min + (max - min) * rand(); 
+float rand(float min, float max, vec2 seed) {
+    return min + (max - min) * rand(seed); 
 }
 
 struct Interval {
@@ -61,8 +62,8 @@ const Interval emptyInterval = Interval(INF, -INF);
 const Interval universeInterval = Interval(-INF, INF);
 
 // Returns a vector to a random point in the [-0.5, 0.5] to [0.5, 0.5] unit square
-vec3 sampleSquare() {
-    return vec3(rand() - 0.5, rand() - 0.5, 0.0);
+vec3 sampleSquare(vec2 seed) {
+    return vec3(rand(seed) - 0.5, rand(seed + vec2(1.0, 2.0)) - 0.5, 0.0);
 }
 
 struct Ray {
@@ -70,12 +71,12 @@ struct Ray {
     vec3 dir;
 };
 
-Ray getRay(vec3 center, vec3 pixelCenter) {
+Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
     // Calculate pixel deltas for x and y separately
     vec2 pixelDelta = 1.0 / u_resolution;
     
     // Get random offset in [-0.5, 0.5] range
-    vec3 offset = sampleSquare();
+    vec3 offset = sampleSquare(seed);
     
     // Apply the properly scaled offset to the pixel center
     vec3 pixelSample = pixelCenter + vec3(offset.xy * pixelDelta, 0.0);
@@ -182,17 +183,12 @@ void main() {
     vec3 pixelCenter = vec3(uv, pos.z);
     vec3 cameraCenter = vec3(0.0, 0.0, focalLength);
 
-    //vec3 rayDir = pixelCenter - cameraCenter;
-    //Ray ray = Ray(cameraCenter, rayDir);
-    //vec3 pixelColor = rayColor(ray);
-    //FragColor = vec4(pixelColor, 1.0);
-
     int samplesPerPixel = 100;
     float pixelSamplesScale = 1.0 / samplesPerPixel;
     vec3 pixelColor = vec3(0.0);
     
     for(int i = 0; i < samplesPerPixel; i++) {
-        Ray ray = getRay(cameraCenter, pixelCenter);
+        Ray ray = getRay(cameraCenter, pixelCenter, uv);
         pixelColor += rayColor(ray);
     }
 
