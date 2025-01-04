@@ -33,6 +33,39 @@ float rand(float min, float max, vec2 seed) {
     return min + (max - min) * rand(seed); 
 }
 
+// Return a random vec3 with random values in the interval [0, 1)
+vec3 randVec3(vec2 seed) {
+    return vec3(rand(seed), rand(seed * 2), rand(seed * 3.0));
+}
+
+// Return a random vec3 with random values in the interval [min, max)
+vec3 randVec3(float min, float max, vec2 seed) {
+    return vec3(rand(min, max, seed), rand(min, max, seed * 2.0), rand(min, max, seed * 3.0));
+}
+
+vec3 randUnitVec3(vec2 seed) {
+    while (true) {
+        vec3 p = randVec3(-1.0, 1.0, seed);
+        float lensq = dot(p, p);
+
+        // TODO(Thomas): Verify this
+        // Max precision of 32-bit float
+        if (1e-38 <= lensq && lensq <= 1.0) {
+            return p / sqrt(lensq);
+        }
+    }
+}
+
+vec3 randOnHemisphere(vec3 normal, vec2 seed) {
+    vec3 onUnitSphere = randUnitVec3(seed);
+
+    // In the same hemisphere as the normal
+    if (dot(onUnitSphere, normal) > 0.0)
+        return onUnitSphere;
+    else 
+        return -onUnitSphere;        
+}
+
 struct Interval {
     float min;
     float max;
@@ -158,7 +191,7 @@ bool hit(Ray ray, Interval rayInterval, inout HitRecord rec) {
     return hitAnything;
 }
 
-vec3 rayColor(Ray ray) {
+vec3 rayColor(Ray ray, vec2 seed) {
     HitRecord rec;
     rec.p = vec3(0.0);
     rec.normal = vec3(0.0);
@@ -189,7 +222,7 @@ void main() {
     
     for(int i = 0; i < samplesPerPixel; i++) {
         Ray ray = getRay(cameraCenter, pixelCenter, uv);
-        pixelColor += rayColor(ray);
+        pixelColor += rayColor(ray, uv);
     }
 
     FragColor = vec4(pixelColor * pixelSamplesScale, 1.0);
