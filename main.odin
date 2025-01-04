@@ -3,6 +3,7 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:log"
+import "core:math"
 import gl "vendor:OpenGL"
 import "vendor:glfw"
 
@@ -10,6 +11,16 @@ PROGRAM_NAME :: "Nyoom"
 
 GL_MAJOR_VERSION :: 4
 GL_MINOR_VERSION :: 6
+
+Vec3 :: [3]f32
+
+Sphere :: struct {
+	center: Vec3,
+	radius: f32,
+}
+
+MAX_SPHERES :: 2
+spheres: [MAX_SPHERES]Sphere
 
 App_State :: struct {
 	running: bool,
@@ -103,6 +114,30 @@ main :: proc() {
 
 	gl.EnableVertexAttribArray(0)
 
+	// set the first sphere in the buffer
+	spheres[0] = Sphere {
+		center = Vec3{},
+		radius = 0.5,
+	}
+
+	spheres[1] = Sphere {
+		center = Vec3{0, -100.5, 0},
+		radius = 100,
+	}
+
+	// setup Uniform Buffer Object for spheres
+	ubo: u32
+	gl.GenBuffers(1, &ubo)
+	gl.BindBuffer(gl.UNIFORM_BUFFER, ubo)
+	gl.BufferData(gl.UNIFORM_BUFFER, size_of(spheres), &spheres[0], gl.STATIC_DRAW)
+
+	// Get the uniform block index and bind it
+	block_index := gl.GetUniformBlockIndex(program, "SphereBlock")
+	gl.UniformBlockBinding(program, block_index, 0)
+
+	// Bind the buffer to the binding point
+	gl.BindBufferBase(gl.UNIFORM_BUFFER, 0, ubo)
+
 	// unbind the vao
 	gl.BindVertexArray(0)
 
@@ -121,9 +156,8 @@ main :: proc() {
 		}
 
 		width, height := glfw.GetWindowSize(window)
-		gl.Uniform2f(gl.GetUniformLocation(program, "resolution"), f32(width), f32(height))
-		gl.Uniform1f(gl.GetUniformLocation(program, "time"), f32(time))
-
+		gl.Uniform2f(gl.GetUniformLocation(program, "u_resolution"), f32(width), f32(height))
+		gl.Uniform1f(gl.GetUniformLocation(program, "u_time"), f32(time))
 
 		update()
 		draw()

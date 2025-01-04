@@ -1,12 +1,25 @@
 #version 460 core
 
+#define INF 1.0 / 0.0
+#define PI 3.14159265
+
+#define MAX_SPHERES 2
+
 in vec3 pos;
 out vec4 FragColor;
 
-uniform vec2 resolution;
-uniform float time;
+struct Sphere {
+    vec3 center;
+    float radius;
+};
 
-#define INF 1.0 / 0.0
+uniform vec2 u_resolution;
+uniform float u_time;
+
+layout(std140) uniform SphereBlock {
+    Sphere spheres[MAX_SPHERES];
+};
+
 
 struct Interval {
     float min;
@@ -36,10 +49,6 @@ bool intervalSurrounds(Interval interval, float x) {
 const Interval emptyInterval = Interval(INF, -INF);
 const Interval universeInterval = Interval(-INF, INF);
 
-struct Sphere {
-    vec3 center;
-    float radius;
-};
 
 struct Ray {
     vec3 origin;
@@ -104,16 +113,16 @@ bool hit(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
     bool hitAnything = false;
     float closestSoFar = rayInterval.max;
 
-    // iterate over all the objects here
-    if (hitSphere(sphere, ray, interval(rayInterval.min, closestSoFar), tempRec)) {
-        hitAnything = true;
-        closestSoFar = tempRec.t;
-        rec = tempRec;
+    for (int i = 0; i < spheres.length(); i++) {
+        if (hitSphere(spheres[i], ray, interval(rayInterval.min, closestSoFar), tempRec)) {
+            hitAnything = true;
+            closestSoFar = tempRec.t;
+            rec = tempRec;
+        }
     }
 
     return hitAnything;
 }
-
 
 vec3 rayColor(Ray ray, Sphere sphere) {
     HitRecord rec;
@@ -133,7 +142,7 @@ vec3 rayColor(Ray ray, Sphere sphere) {
 
 void main() {
     vec2 uv = pos.xy;
-    vec2 aspectRatio = vec2(resolution.x / resolution.y, 1.0);
+    vec2 aspectRatio = vec2(u_resolution.x / u_resolution.y, 1.0);
     uv *= aspectRatio;
 
     float focalLength = 1.0;
@@ -142,7 +151,6 @@ void main() {
     vec3 rayDir = pixelCenter - cameraCenter;
 
     Ray ray = Ray(cameraCenter, rayDir);
-    Sphere sphere = Sphere(vec3(0.0), 0.5);
 
-    FragColor = vec4(rayColor(ray, sphere), 1.0);
+    FragColor = vec4(rayColor(ray, spheres[0]), 1.0);
 }
