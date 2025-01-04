@@ -15,11 +15,22 @@ struct Sphere {
 
 uniform vec2 u_resolution;
 uniform float u_time;
+uniform float u_zoom;
 
 layout(std140) uniform SphereBlock {
     Sphere spheres[MAX_SPHERES];
 };
 
+
+// Returns a random real number in then interval [0, 1)
+float rand() {
+   return fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
+// Returns a random real number in the interval [min, max)
+float rand(float min, float max) {
+    return min + (max - min) * rand(); 
+}
 
 struct Interval {
     float min;
@@ -49,11 +60,33 @@ bool intervalSurrounds(Interval interval, float x) {
 const Interval emptyInterval = Interval(INF, -INF);
 const Interval universeInterval = Interval(-INF, INF);
 
+// Returns a vector to a random point in the [-0.5, 0.5] to [0.5, 0.5] unit square
+vec3 sampleSquare() {
+    return vec3(rand() - 0.5, rand() - 0.5, 0.0);
+}
 
 struct Ray {
     vec3 origin;
     vec3 dir;
 };
+
+Ray getRay(vec3 center, vec3 pixelCenter) {
+    // Calculate pixel deltas for x and y separately
+    vec2 pixelDelta = 1.0 / u_resolution;
+    
+    // Get random offset in [-0.5, 0.5] range
+    vec3 offset = sampleSquare();
+    
+    // Apply the properly scaled offset to the pixel center
+    vec3 pixelSample = pixelCenter + vec3(offset.xy * pixelDelta, 0.0);
+    
+    vec3 rayOrigin = center;
+
+    vec3 rayDirection = pixelSample - rayOrigin;
+
+    return Ray(rayOrigin, rayDirection);
+}
+
 
 struct HitRecord {
     vec3 p;
@@ -108,7 +141,7 @@ bool hitSphere(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec
     return true;
 }
 
-bool hit(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
+bool hit(Ray ray, Interval rayInterval, inout HitRecord rec) {
     HitRecord tempRec;
     bool hitAnything = false;
     float closestSoFar = rayInterval.max;
@@ -124,14 +157,14 @@ bool hit(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
     return hitAnything;
 }
 
-vec3 rayColor(Ray ray, Sphere sphere) {
+vec3 rayColor(Ray ray) {
     HitRecord rec;
     rec.p = vec3(0.0);
     rec.normal = vec3(0.0);
     rec.t = 0.0;
     rec.frontFace = false;
 
-    if (hit(sphere, ray, interval(0, INF), rec)) {
+    if (hit(ray, interval(0, INF), rec)) {
         return 0.5 * (rec.normal + vec3(1.0));
     }
 
@@ -143,14 +176,25 @@ vec3 rayColor(Ray ray, Sphere sphere) {
 void main() {
     vec2 uv = pos.xy;
     vec2 aspectRatio = vec2(u_resolution.x / u_resolution.y, 1.0);
-    uv *= aspectRatio;
+    uv *= aspectRatio / u_zoom;
 
     float focalLength = 1.0;
     vec3 pixelCenter = vec3(uv, pos.z);
     vec3 cameraCenter = vec3(0.0, 0.0, focalLength);
-    vec3 rayDir = pixelCenter - cameraCenter;
 
-    Ray ray = Ray(cameraCenter, rayDir);
+    //vec3 rayDir = pixelCenter - cameraCenter;
+    //Ray ray = Ray(cameraCenter, rayDir);
+    //vec3 pixelColor = rayColor(ray);
+    //FragColor = vec4(pixelColor, 1.0);
 
-    FragColor = vec4(rayColor(ray, spheres[0]), 1.0);
+    int samplesPerPixel = 100;
+    float pixelSamplesScale = 1.0 / samplesPerPixel;
+    vec3 pixelColor = vec3(0.0);
+    
+    for(int i = 0; i < samplesPerPixel; i++) {
+        Ray ray = getRay(cameraCenter, pixelCenter);
+        pixelColor += rayColor(ray);
+    }
+
+    FragColor = vec4(pixelColor * pixelSamplesScale, 1.0);
 }

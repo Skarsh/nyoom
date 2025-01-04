@@ -22,8 +22,11 @@ Sphere :: struct {
 MAX_SPHERES :: 2
 spheres: [MAX_SPHERES]Sphere
 
+Camera :: struct {}
+
 App_State :: struct {
 	running: bool,
+	zoom:    f32,
 }
 
 app_state: App_State
@@ -62,6 +65,7 @@ main :: proc() {
 	glfw.SwapInterval(1)
 
 	glfw.SetKeyCallback(window, key_callback)
+	glfw.SetScrollCallback(window, scroll_callback)
 
 	glfw.SetFramebufferSizeCallback(window, size_callback)
 
@@ -116,7 +120,7 @@ main :: proc() {
 
 	// set the first sphere in the buffer
 	spheres[0] = Sphere {
-		center = Vec3{},
+		center = Vec3{0.5, 0.0, 0.0},
 		radius = 0.5,
 	}
 
@@ -158,6 +162,7 @@ main :: proc() {
 		width, height := glfw.GetWindowSize(window)
 		gl.Uniform2f(gl.GetUniformLocation(program, "u_resolution"), f32(width), f32(height))
 		gl.Uniform1f(gl.GetUniformLocation(program, "u_time"), f32(time))
+		gl.Uniform1f(gl.GetUniformLocation(program, "u_zoom"), app_state.zoom)
 
 		update()
 		draw()
@@ -177,6 +182,7 @@ main :: proc() {
 
 init :: proc() {
 	app_state.running = true
+	app_state.zoom = 1.0
 }
 
 update :: proc() {
@@ -196,6 +202,18 @@ key_callback :: proc "c" (window: glfw.WindowHandle, key, scancode, action, mods
 
 size_callback :: proc "c" (window: glfw.WindowHandle, width, height: i32) {
 	gl.Viewport(0, 0, width, height)
+}
+
+scroll_callback :: proc "c" (window: glfw.WindowHandle, x_offset, y_offset: f64) {
+	context = runtime.default_context()
+
+	// Adjust these values to control zoom sensitivity
+	zoom_speed: f32 = 0.1
+	min_zoom: f32 = 0.1
+	max_zoom: f32 = 10.0
+
+	app_state.zoom *= 1.0 - (f32(y_offset) * zoom_speed)
+	app_state.zoom = math.clamp(app_state.zoom, min_zoom, max_zoom)
 }
 
 error_callback :: proc "c" (error: i32, description: cstring) {
