@@ -22,6 +22,16 @@ layout(std140) uniform SphereBlock {
     Sphere spheres[MAX_SPHERES];
 };
 
+float linearToGamma(float linearComponent) {
+    if (linearComponent > 0.0) 
+        return sqrt(linearComponent); 
+
+    return 0.0;
+}
+
+vec3 linearToGammaVec3(vec3 color) {
+    return vec3(linearToGamma(color.x), linearToGamma(color.y), linearToGamma(color.z));
+}
 
 // Returns a random real number in then interval [0, 1)
 float rand(vec2 seed) {
@@ -33,37 +43,67 @@ float rand(float min, float max, vec2 seed) {
     return min + (max - min) * rand(seed); 
 }
 
-// Return a random vec3 with random values in the interval [0, 1)
+
+// Return a random vec3 with values in the interval [0, 1)
 vec3 randVec3(vec2 seed) {
-    return vec3(rand(seed), rand(seed * 2), rand(seed * 3.0));
+    vec3 h = vec3(seed, seed.x * seed.y);
+    h = fract(h * vec3(0.1031, 0.1030, 0.0973));
+    h += dot(h, h.yzx + 33.33);
+    return fract((h.xxy + h.yzz) * h.zyx);
 }
 
-// Return a random vec3 with random values in the interval [min, max)
+// Return a random vec3 with values in the interval [min, max)
 vec3 randVec3(float min, float max, vec2 seed) {
-    return vec3(rand(min, max, seed), rand(min, max, seed * 2.0), rand(min, max, seed * 3.0));
+    vec3 r = randVec3(seed);
+    return min + (max - min) * r;
 }
 
-vec3 randUnitVec3(vec2 seed) {
-    while (true) {
-        vec3 p = randVec3(-1.0, 1.0, seed);
-        float lensq = dot(p, p);
 
-        // TODO(Thomas): Verify this
-        // Max precision of 32-bit float
-        if (1e-38 <= lensq && lensq <= 1.0) {
-            return p / sqrt(lensq);
-        }
-    }
+vec3 randUnitVector(vec2 seed) {
+    float u = rand(seed);
+    float v = rand(seed + vec2(1.0, 0.0));
+    float theta = 2.0 * 3.14159265359 * u;
+    float phi = acos(2.0 * v - 1.0);
+    
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
 }
 
-vec3 randOnHemisphere(vec3 normal, vec2 seed) {
-    vec3 onUnitSphere = randUnitVec3(seed);
+// Basic rejection sampling method
+vec3 sampleHemisphere(vec3 normal, vec2 seed)
+{
+    vec3 vec = normalize(
+        vec3(
+            rand(seed)*2.0-1.0,
+            rand(seed.yx+vec2(1.123123123,2.545454))*2.0-1.0,
+            rand(seed-vec2(9.21428,7.43163431))*2.0-1.0
+        )
+    );
 
-    // In the same hemisphere as the normal
-    if (dot(onUnitSphere, normal) > 0.0)
-        return onUnitSphere;
-    else 
-        return -onUnitSphere;        
+	if (dot(vec, normal) < 0.0) vec *= -1; 
+
+	return vec;
+}
+
+vec3 hemisphereRejection(vec3 normal, vec2 seed) {
+    vec3 randomVec = vec3(
+        rand(seed) * 2.0 - 1.0,
+        rand(seed) * (2.0 - 1.0) * 2.0,
+        rand(seed) * (2.0 - 1.0) * 3.0
+    );
+    vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
+    vec3 bitangent = cross(normal, tangent);
+    float r = rand(seed * 4.0);
+    float theta = 2.0 * 3.14159265359 * rand(seed * 5.0);
+    float r_sqrt = sqrt(r);
+    return normalize(
+        r_sqrt * cos(theta) * tangent +
+        r_sqrt * sin(theta) * bitangent +
+        sqrt(1.0 - r) * normal
+    );
 }
 
 struct Interval {
@@ -197,14 +237,31 @@ vec3 rayColor(Ray ray, vec2 seed) {
     rec.normal = vec3(0.0);
     rec.t = 0.0;
     rec.frontFace = false;
-
-    if (hit(ray, interval(0, INF), rec)) {
-        return 0.5 * (rec.normal + vec3(1.0));
-    }
+    
+    vec3 rayOrigin = ray.origin;
+    vec3 rayDirection = ray.dir;
 
     vec3 unitDirection = normalize(ray.dir); 
     float a = 0.5 * (unitDirection.y + 1.0);
-    return mix(vec3(1.0), vec3(0.5, 0.7, 1.0), a);
+    vec3 pixelColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), a);
+
+
+    int maxBounces = 10;
+    for (int i = 0; i < maxBounces; i++) {
+        if (hit(Ray(rayOrigin, rayDirection), interval(0.001, INF), rec)) {
+            // New ray origin at the hit point
+            rayOrigin = rec.p; 
+
+            // Calculate new rayDirection
+            rayDirection = rec.normal + randUnitVector(seed);
+
+            pixelColor *= 0.5;
+        } else {
+            break;
+        }
+    }
+
+    return pixelColor;
 }
 
 void main() {
@@ -224,6 +281,7 @@ void main() {
         Ray ray = getRay(cameraCenter, pixelCenter, uv);
         pixelColor += rayColor(ray, uv);
     }
+    pixelColor *= pixelSamplesScale;
 
-    FragColor = vec4(pixelColor * pixelSamplesScale, 1.0);
+    FragColor = vec4(linearToGammaVec3(pixelColor), 1.0);
 }

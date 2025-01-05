@@ -124,7 +124,7 @@ main :: proc() {
 
 	// set the first sphere in the buffer
 	spheres[0] = Sphere {
-		center = Vec3{0.5, 0.0, 0.0},
+		center = Vec3{0.0, 0.0, 0.0},
 		radius = 0.5,
 	}
 
