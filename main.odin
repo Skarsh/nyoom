@@ -46,7 +46,6 @@ main :: proc() {
 	glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, GL_MINOR_VERSION)
 
 	fmt.println("Nyoom!!")
-	// TODO(Thomas): Add error callback
 
 	if (glfw.Init() != true) {
 		log.error("Failed to initialize GLFW")
@@ -54,6 +53,7 @@ main :: proc() {
 	}
 
 	defer glfw.Terminate()
+	glfw.SetErrorCallback(error_callback)
 
 	window := glfw.CreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, PROGRAM_NAME, nil, nil)
 
