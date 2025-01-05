@@ -158,7 +158,11 @@ const Interval universeInterval = Interval(-INF, INF);
 
 // Returns a vector to a random point in the [-0.5, 0.5] to [0.5, 0.5] unit square
 vec3 sampleSquare(vec2 seed) {
-    return vec3(rand(seed) - 0.5, rand(seed + vec2(1.0, 2.0)) - 0.5, 0.0);
+    return vec3(
+        rand(seed) - 0.5,
+        rand(seed * vec2(12.989, 78.233)) - 0.5,
+        0.0
+    );
 }
 
 struct Ray {
@@ -327,9 +331,15 @@ void main() {
     vec3 pixelColor = vec3(0.0);
     
     for(int i = 0; i < SAMPLES_PER_PIXEL; i++) {
-        Ray ray = getRay(cameraCenter, pixelCenter, uv + vec2(float(i)));
-        pixelColor += rayColor(ray, uv);
+
+        // Create a unique seed for each sample, pixel, and frame
+        vec2 seed = uv + vec2(float(i), u_time);
+        Ray ray = getRay(cameraCenter, pixelCenter, seed);
+
+        // Pass the unique seed to rayColor as well
+        pixelColor += rayColor(ray, seed);
     }
+
     pixelColor *= pixelSamplesScale;
 
     FragColor = vec4(linearToGammaVec3(pixelColor), 1.0);
