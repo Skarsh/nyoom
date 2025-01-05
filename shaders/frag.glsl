@@ -4,6 +4,8 @@
 #define PI 3.14159265
 
 #define MAX_SPHERES 2
+#define MAX_BOUNCES 10
+#define SAMPLES_PER_PIXEL 100
 
 in vec3 pos;
 out vec4 FragColor;
@@ -246,8 +248,7 @@ vec3 rayColor(Ray ray, vec2 seed) {
     vec3 pixelColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), a);
 
 
-    int maxBounces = 10;
-    for (int i = 0; i < maxBounces; i++) {
+    for (int i = 0; i < MAX_BOUNCES; i++) {
         if (hit(Ray(rayOrigin, rayDirection), interval(0.001, INF), rec)) {
             // New ray origin at the hit point
             rayOrigin = rec.p; 
@@ -273,12 +274,11 @@ void main() {
     vec3 pixelCenter = vec3(uv, pos.z);
     vec3 cameraCenter = vec3(0.0, 0.0, focalLength);
 
-    int samplesPerPixel = 100;
-    float pixelSamplesScale = 1.0 / samplesPerPixel;
+    float pixelSamplesScale = 1.0 / SAMPLES_PER_PIXEL;
     vec3 pixelColor = vec3(0.0);
     
-    for(int i = 0; i < samplesPerPixel; i++) {
-        Ray ray = getRay(cameraCenter, pixelCenter, uv);
+    for(int i = 0; i < SAMPLES_PER_PIXEL; i++) {
+        Ray ray = getRay(cameraCenter, pixelCenter, uv + vec2(float(i)));
         pixelColor += rayColor(ray, uv);
     }
     pixelColor *= pixelSamplesScale;
