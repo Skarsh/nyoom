@@ -1,6 +1,7 @@
 package main
 
 import "base:runtime"
+import "core:c"
 import "core:fmt"
 import "core:log"
 import "core:math"
@@ -14,12 +15,34 @@ GL_MINOR_VERSION :: 6
 
 Vec3 :: [3]f32
 
+Material_Type :: enum (c.int) {
+	Lambertian = 0,
+	Metal = 1,
+	Dielectric,
+}
+
+// TODO(Thomas): Later we should just make a uniform buffer containing all the different materials
+// then just have an index in the sphere or other objects about which Materials to use.
+// TODO(Thomas): For some reason the byte array padding doesn't work, floats is the only way
+// I've made thise work. Need to find a proper solution for this
+Material :: struct #align (16) {
+	type:   Material_Type,
+	//_pad1:  [3]u8,
+	a:      f32,
+	b:      f32,
+	c:      f32,
+	albedo: Vec3,
+	fuzz:   f32,
+}
+
+
 Sphere :: struct {
+	mat:    Material,
 	center: Vec3,
 	radius: f32,
 }
 
-MAX_SPHERES :: 2
+MAX_SPHERES :: 4
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct {
@@ -35,8 +58,8 @@ App_State :: struct {
 
 app_state: App_State
 
-WINDOW_WIDTH :: 1920
-WINDOW_HEIGHT :: 1080
+WINDOW_WIDTH :: 1280
+WINDOW_HEIGHT :: 720
 
 main :: proc() {
 	glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
@@ -122,15 +145,50 @@ main :: proc() {
 
 	gl.EnableVertexAttribArray(0)
 
-	// set the first sphere in the buffer
+	material_ground := Material {
+		type   = .Lambertian,
+		albedo = Vec3{0.8, 0.8, 0.0},
+	}
+
+	material_center := Material {
+		type   = .Lambertian,
+		albedo = Vec3{0.1, 0.2, 0.5},
+	}
+
+	material_left := Material {
+		type   = .Metal,
+		albedo = Vec3{0.8, 0.8, 0.8},
+		fuzz   = 0.3,
+	}
+
+	material_right := Material {
+		type   = .Metal,
+		albedo = Vec3{0.8, 0.6, 0.2},
+		fuzz   = 1.0,
+	}
+
 	spheres[0] = Sphere {
-		center = Vec3{0.0, 0.0, 0.0},
-		radius = 0.5,
+		mat    = material_ground,
+		center = Vec3{0.0, -100.5, -0.5},
+		radius = 100,
 	}
 
 	spheres[1] = Sphere {
-		center = Vec3{0, -100.5, 0},
-		radius = 100,
+		mat    = material_center,
+		center = Vec3{0, 0.0, -0.2},
+		radius = 0.5,
+	}
+
+	spheres[2] = Sphere {
+		mat    = material_left,
+		center = Vec3{-1, 0.0, 0.0},
+		radius = 0.5,
+	}
+
+	spheres[3] = Sphere {
+		mat    = material_right,
+		center = Vec3{1, 0.0, 0.0},
+		radius = 0.5,
 	}
 
 	// setup Uniform Buffer Object for spheres

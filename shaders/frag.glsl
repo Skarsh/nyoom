@@ -3,14 +3,25 @@
 #define INF 1.0 / 0.0
 #define PI 3.14159265
 
-#define MAX_SPHERES 2
+#define MAX_SPHERES 4
 #define MAX_BOUNCES 10
 #define SAMPLES_PER_PIXEL 100
+
+#define MATERIAL_LAMBERTIAN 0
+#define MATERIAL_METAL 1
+#define MATERIAL_DIELECTRIC 2
 
 in vec3 pos;
 out vec4 FragColor;
 
+struct Material {
+    int type;
+    vec3 albedo;
+    float fuzz;
+};
+
 struct Sphere {
+    Material mat;
     vec3 center;
     float radius;
 };
@@ -23,6 +34,12 @@ uniform vec3 u_camera_center;
 layout(std140) uniform SphereBlock {
     Sphere spheres[MAX_SPHERES];
 };
+
+// Returns true if vector is close to zero in all dimensions
+bool nearZero(vec3 v) {
+    float s = 1e-8;
+    return (abs(v[0]) < s) && (abs(v[1]) < s) && (abs(v[2]) < s);
+}
 
 float linearToGamma(float linearComponent) {
     if (linearComponent > 0.0) 
@@ -44,7 +61,6 @@ float rand(vec2 seed) {
 float rand(float min, float max, vec2 seed) {
     return min + (max - min) * rand(seed); 
 }
-
 
 // Return a random vec3 with values in the interval [0, 1)
 vec3 randVec3(vec2 seed) {
@@ -108,6 +124,10 @@ vec3 hemisphereRejection(vec3 normal, vec2 seed) {
     );
 }
 
+vec3 reflect(vec3 v, vec3 n) {
+    return v - 2.0 * dot(v, n) * n;
+}
+
 struct Interval {
     float min;
     float max;
@@ -167,12 +187,34 @@ Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
 struct HitRecord {
     vec3 p;
     vec3 normal;
+    Material mat;
     float t;
     bool frontFace;
 };
 
+bool lambertianScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenuation, inout Ray scattered, vec2 seed) {
+    vec3 scatterDirection = rec.normal + randUnitVector(seed);
+
+    // Catch degenerate scatter direction
+    if (nearZero(scatterDirection))
+        scatterDirection = rec.normal;
+
+    scattered = Ray(rec.p, scatterDirection);
+    attenuation = material.albedo;
+    return true;
+}
+
+bool metalScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenuation, inout Ray scattered, vec2 seed) {
+    vec3 reflected = reflect(rayIn.dir, rec.normal);
+    reflected = normalize(reflected) + (material.fuzz * randUnitVector(seed));
+    scattered = Ray(rec.p, reflected);
+    attenuation = material.albedo;
+    return (dot(scattered.dir, rec.normal) > 0.0);
+}
+
 HitRecord hitRecord() {
-    return HitRecord(vec3(0.0), vec3(0.0), 0.0, false);
+    Material mat = Material(0, vec3(0.0), 0.0);
+    return HitRecord(vec3(0.0), vec3(0.0), mat, 0.0, false);
 }
 
 vec3 rayAt(Ray ray, float t) {
@@ -213,12 +255,13 @@ bool hitSphere(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec
     rec.p = rayAt(ray, rec.t);
     vec3 outwardNormal = (rec.p - sphere.center) / sphere.radius;
     setFaceNormal(rec, ray, outwardNormal);
+    rec.mat = sphere.mat;
 
     return true;
 }
 
 bool hit(Ray ray, Interval rayInterval, inout HitRecord rec) {
-    HitRecord tempRec;
+    HitRecord tempRec = hitRecord();
     bool hitAnything = false;
     float closestSoFar = rayInterval.max;
 
@@ -233,36 +276,42 @@ bool hit(Ray ray, Interval rayInterval, inout HitRecord rec) {
     return hitAnything;
 }
 
-vec3 rayColor(Ray ray, vec2 seed) {
+vec3 rayColor(Ray r, vec2 seed) {
+    Ray ray = r;
+    vec3 accumulatedColor = vec3(1.0);
     HitRecord rec;
-    rec.p = vec3(0.0);
-    rec.normal = vec3(0.0);
-    rec.t = 0.0;
-    rec.frontFace = false;
-    
-    vec3 rayOrigin = ray.origin;
-    vec3 rayDirection = ray.dir;
 
-    vec3 unitDirection = normalize(ray.dir); 
-    float a = 0.5 * (unitDirection.y + 1.0);
-    vec3 pixelColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), a);
-
-
-    for (int i = 0; i < MAX_BOUNCES; i++) {
-        if (hit(Ray(rayOrigin, rayDirection), interval(0.001, INF), rec)) {
-            // New ray origin at the hit point
-            rayOrigin = rec.p; 
-
-            // Calculate new rayDirection
-            rayDirection = rec.normal + randUnitVector(seed);
-
-            pixelColor *= 0.5;
-        } else {
-            break;
+    for (int depth = 0; depth < MAX_BOUNCES; depth++) {
+        if (hit(ray, interval(0.001, INF), rec)) {
+            Ray scattered;
+            vec3 attenuation;
+            
+            if (rec.mat.type == MATERIAL_LAMBERTIAN) {
+                if (lambertianScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
+                    accumulatedColor *= attenuation;
+                    ray = scattered;
+                    continue;
+                }
+                return vec3(0.0);
+            } else if (rec.mat.type == MATERIAL_METAL) {
+                if (metalScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
+                    accumulatedColor *= attenuation;
+                    ray = scattered;
+                    continue;
+                }
+                return vec3(0.0);
+            }
         }
+        
+        // If we didn't hit anything, return background color * accumulated color
+        vec3 unit_direction = normalize(ray.dir);
+        float a = 0.5 * (unit_direction.y + 1.0);
+        vec3 background = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
+        return accumulatedColor * background;
     }
-
-    return pixelColor;
+    
+    // If we exceeded bounce limit, return black
+    return vec3(0.0);
 }
 
 void main() {
