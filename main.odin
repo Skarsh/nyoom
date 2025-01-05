@@ -26,13 +26,14 @@ Material_Type :: enum (c.int) {
 // TODO(Thomas): For some reason the byte array padding doesn't work, floats is the only way
 // I've made thise work. Need to find a proper solution for this
 Material :: struct #align (16) {
-	type:   Material_Type,
+	type:            Material_Type,
 	//_pad1:  [3]u8,
-	a:      f32,
-	b:      f32,
-	c:      f32,
-	albedo: Vec3,
-	fuzz:   f32,
+	a:               f32,
+	b:               f32,
+	c:               f32,
+	albedo:          Vec3,
+	fuzz:            f32,
+	refractionIndex: f32,
 }
 
 
@@ -42,7 +43,7 @@ Sphere :: struct {
 	radius: f32,
 }
 
-MAX_SPHERES :: 4
+MAX_SPHERES :: 5
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct {
@@ -156,9 +157,13 @@ main :: proc() {
 	}
 
 	material_left := Material {
-		type   = .Metal,
-		albedo = Vec3{0.8, 0.8, 0.8},
-		fuzz   = 0.3,
+		type            = .Dielectric,
+		refractionIndex = 1.50,
+	}
+
+	material_bubble := Material {
+		type            = .Dielectric,
+		refractionIndex = 1.00 / 1.50,
 	}
 
 	material_right := Material {
@@ -186,6 +191,12 @@ main :: proc() {
 	}
 
 	spheres[3] = Sphere {
+		mat    = material_bubble,
+		center = Vec3{-1, 0.0, 0.0},
+		radius = 0.4,
+	}
+
+	spheres[4] = Sphere {
 		mat    = material_right,
 		center = Vec3{1, 0.0, 0.0},
 		radius = 0.5,

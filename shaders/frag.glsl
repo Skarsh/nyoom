@@ -3,7 +3,7 @@
 #define INF 1.0 / 0.0
 #define PI 3.14159265
 
-#define MAX_SPHERES 4
+#define MAX_SPHERES 5
 #define MAX_BOUNCES 10
 #define SAMPLES_PER_PIXEL 100
 
@@ -18,6 +18,7 @@ struct Material {
     int type;
     vec3 albedo;
     float fuzz;
+    float refractionIndex;
 };
 
 struct Sphere {
@@ -128,6 +129,20 @@ vec3 reflect(vec3 v, vec3 n) {
     return v - 2.0 * dot(v, n) * n;
 }
 
+vec3 refract(vec3 uv, vec3 n, float etai_over_etat) {
+    float cos_theta = min(dot(-uv, n), 1.0);
+    vec3 rOutPerp = etai_over_etat * (uv + cos_theta * n);
+    vec3 rOutParallel = -sqrt(abs(1.0 - dot(rOutPerp, rOutPerp))) * n;
+    return rOutPerp + rOutParallel;
+}
+
+float reflectance(float cosine, float refractionIndex) {
+    // Use Schlick's approximation for reflectance
+    float r0 = (1.0 - refractionIndex) / (1.0 + refractionIndex);
+    r0 = r0 * r0;
+    return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
+}
+
 struct Interval {
     float min;
     float max;
@@ -216,8 +231,30 @@ bool metalScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenu
     return (dot(scattered.dir, rec.normal) > 0.0);
 }
 
+bool dielectricScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenuation, inout Ray scattered, vec2 seed) {
+    attenuation = vec3(1.0, 1.0, 1.0);
+    float ri = rec.frontFace ? (1.0 / material.refractionIndex) : material.refractionIndex;
+    
+    vec3 unitDirection = normalize(rayIn.dir);
+
+    float cosTheta = min(dot(-unitDirection, rec.normal), 1.0);
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+    bool cannotRefract = ri * sinTheta > 1.0;
+    vec3 direction;
+    
+    if (cannotRefract || reflectance(cosTheta, ri) > rand(seed))
+        direction = reflect(unitDirection, rec.normal);
+    else 
+        direction = refract(unitDirection, rec.normal, ri);
+
+    scattered = Ray(rec.p, direction);
+
+    return true;
+}
+
 HitRecord hitRecord() {
-    Material mat = Material(0, vec3(0.0), 0.0);
+    Material mat = Material(0, vec3(0.0), 0.0, 0.0);
     return HitRecord(vec3(0.0), vec3(0.0), mat, 0.0, false);
 }
 
@@ -304,6 +341,12 @@ vec3 rayColor(Ray r, vec2 seed) {
                     continue;
                 }
                 return vec3(0.0);
+            } else if(rec.mat.type == MATERIAL_DIELECTRIC) {
+                if (dielectricScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
+                    accumulatedColor *= attenuation;
+                    ray = scattered;
+                    continue;
+                }
             }
         }
         
