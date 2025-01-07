@@ -77,7 +77,6 @@ vec3 randVec3(float min, float max, vec2 seed) {
     return min + (max - min) * r;
 }
 
-
 vec3 randUnitVector(vec2 seed) {
     float u = rand(seed);
     float v = rand(seed + vec2(1.0, 0.0));
@@ -269,7 +268,6 @@ void setFaceNormal(inout HitRecord rec, Ray ray, vec3 outwardNormal) {
     rec.normal = rec.frontFace ? outwardNormal : -outwardNormal;
 }
 
-
 bool hitSphere(Sphere sphere, Ray ray, Interval rayInterval, inout HitRecord rec) {
     vec3 oc = sphere.center - ray.origin;
     float a = dot(ray.dir, ray.dir);
@@ -321,7 +319,7 @@ vec3 rayColor(Ray r, vec2 seed) {
     Ray ray = r;
     vec3 accumulatedColor = vec3(1.0);
     HitRecord rec;
-
+    
     for (int depth = 0; depth < MAX_BOUNCES; depth++) {
         if (hit(ray, interval(0.001, INF), rec)) {
             Ray scattered;
@@ -333,14 +331,12 @@ vec3 rayColor(Ray r, vec2 seed) {
                     ray = scattered;
                     continue;
                 }
-                return vec3(0.0);
             } else if (rec.mat.type == MATERIAL_METAL) {
                 if (metalScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
                     accumulatedColor *= attenuation;
                     ray = scattered;
                     continue;
                 }
-                return vec3(0.0);
             } else if(rec.mat.type == MATERIAL_DIELECTRIC) {
                 if (dielectricScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
                     accumulatedColor *= attenuation;
@@ -348,17 +344,14 @@ vec3 rayColor(Ray r, vec2 seed) {
                     continue;
                 }
             }
+            return vec3(0.0);
         }
-        
-        // If we didn't hit anything, return background color * accumulated color
-        vec3 unit_direction = normalize(ray.dir);
-        float a = 0.5 * (unit_direction.y + 1.0);
-        vec3 background = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
-        return accumulatedColor * background;
     }
     
-    // If we exceeded bounce limit, return black
-    return vec3(0.0);
+    vec3 unit_direction = normalize(ray.dir);
+    float a = 0.5 * (unit_direction.y + 1.0);
+    vec3 background = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
+    return accumulatedColor * background;
 }
 
 void main() {
