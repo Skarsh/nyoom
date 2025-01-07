@@ -5,6 +5,7 @@ import "core:c"
 import "core:fmt"
 import "core:log"
 import "core:math"
+import lin "core:math/linalg"
 import gl "vendor:OpenGL"
 import "vendor:glfw"
 
@@ -47,7 +48,18 @@ MAX_SPHERES :: 5
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct {
-	center: Vec3,
+	center:            Vec3,
+	world_up:          Vec3,
+	front:             Vec3,
+	up:                Vec3,
+	right:             Vec3,
+	// euler angles
+	yaw:               f32,
+	pitch:             f32,
+	// camera options
+	movement_speed:    f32,
+	mouse_sensitivity: f32,
+	zoom:              f32,
 }
 
 App_State :: struct {
@@ -236,12 +248,8 @@ main :: proc() {
 		gl.Uniform2f(gl.GetUniformLocation(program, "u_resolution"), f32(width), f32(height))
 		gl.Uniform1f(gl.GetUniformLocation(program, "u_time"), f32(time))
 		gl.Uniform1f(gl.GetUniformLocation(program, "u_zoom"), app_state.zoom)
-		gl.Uniform3f(
-			gl.GetUniformLocation(program, "u_camera_center"),
-			app_state.camera.center.x,
-			app_state.camera.center.y,
-			app_state.camera.center.z,
-		)
+
+		set_camera_uniform(program, app_state.camera)
 
 		update(f32(delta_time))
 		draw()
@@ -259,25 +267,64 @@ main :: proc() {
 
 }
 
+set_camera_uniform :: proc(program: u32, camera: Camera) {
+	center_loc := gl.GetUniformLocation(program, "u_camera.center")
+	look_at_loc := gl.GetUniformLocation(program, "u_camera.lookAt")
+	world_up_loc := gl.GetUniformLocation(program, "u_camera.worldUp")
+	front_loc := gl.GetUniformLocation(program, "u_camera.front")
+	up_loc := gl.GetUniformLocation(program, "u_camera.up")
+	right_loc := gl.GetUniformLocation(program, "u_camera.right")
+
+	gl.Uniform3f(center_loc, camera.center.x, camera.center.y, camera.center.z)
+	gl.Uniform3f(world_up_loc, camera.world_up.x, camera.world_up.y, camera.world_up.z)
+	gl.Uniform3f(front_loc, camera.front.x, camera.front.y, camera.front.z)
+	gl.Uniform3f(up_loc, camera.up.x, camera.up.y, camera.up.z)
+	gl.Uniform3f(right_loc, camera.right.x, camera.right.y, camera.right.z)
+}
+
 init :: proc(window: glfw.WindowHandle) {
 	app_state.window = window
 	app_state.running = true
 	app_state.zoom = 1.0
 	app_state.camera = Camera {
-		center = Vec3{0, 0, 1},
+		center         = Vec3{0, 0, 1},
+		up             = Vec3{0, 1, 0},
+		front          = Vec3{0, 0, -1},
+		movement_speed = 1.0,
 	}
 }
 
+update_camera_vectors :: proc(camera: ^Camera) {
+	front := Vec3{}
+	front.x = math.cos(math.to_radians(camera.yaw) * math.cos(math.to_radians(camera.pitch)))
+	front.y = math.sin(math.to_radians(camera.pitch))
+	front.z = math.sin(math.to_radians(camera.yaw) * math.cos(math.to_radians(camera.pitch)))
+	camera.front = lin.normalize(front)
+
+	// also re-calculate the Right and Up vector
+	camera.right = lin.normalize(lin.cross(camera.front, camera.world_up))
+	camera.up = lin.normalize(lin.cross(camera.right, camera.front))
+}
+
 update :: proc(dt: f32) {
-	movement_speed: f32 = 1.0
-	movement_delta := dt * movement_speed
+	camera := &app_state.camera
+	camera_speed := dt * camera.movement_speed
 	if glfw.GetKey(app_state.window, glfw.KEY_W) == glfw.PRESS {
-		app_state.camera.center.z -= movement_delta
+		camera.center += camera_speed * camera.front
+	}
+	if glfw.GetKey(app_state.window, glfw.KEY_S) == glfw.PRESS {
+		camera.center -= camera_speed * camera.front
+	}
+	if glfw.GetKey(app_state.window, glfw.KEY_A) == glfw.PRESS {
+		camera.center -= camera_speed * lin.normalize(lin.cross(camera.front, camera.up))
+	}
+	if glfw.GetKey(app_state.window, glfw.KEY_D) == glfw.PRESS {
+		camera.center += camera_speed * lin.normalize(lin.cross(camera.front, camera.up))
 	}
 }
 
 draw :: proc() {
-	gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+	gl.ClearColor(0.2, 0.3, 0.3, -10.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 }
 

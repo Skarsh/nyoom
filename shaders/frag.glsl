@@ -14,6 +14,15 @@
 in vec3 pos;
 out vec4 FragColor;
 
+struct Camera {
+    vec3 center;
+    vec3 lookAt;
+    vec3 worldUp;
+    vec3 front;
+    vec3 up;
+    vec3 right;
+};
+
 struct Material {
     int type;
     vec3 albedo;
@@ -31,6 +40,8 @@ uniform vec2 u_resolution;
 uniform float u_time;
 uniform float u_zoom;
 uniform vec3 u_camera_center;
+
+uniform Camera u_camera;
 
 layout(std140) uniform SphereBlock {
     Sphere spheres[MAX_SPHERES];
@@ -359,9 +370,7 @@ void main() {
     vec2 aspectRatio = vec2(u_resolution.x / u_resolution.y, 1.0);
     uv *= aspectRatio / u_zoom;
 
-    float focalLength = 1.0;
     vec3 pixelCenter = vec3(uv, pos.z);
-    vec3 cameraCenter = vec3(0.0, 0.0, focalLength);
 
     float pixelSamplesScale = 1.0 / SAMPLES_PER_PIXEL;
     vec3 pixelColor = vec3(0.0);
@@ -370,7 +379,7 @@ void main() {
 
         // Create a unique seed for each sample, pixel, and frame
         vec2 seed = uv + vec2(float(i), u_time);
-        Ray ray = getRay(cameraCenter, pixelCenter, seed);
+        Ray ray = getRay(u_camera.center, pixelCenter, seed);
 
         // Pass the unique seed to rayColor as well
         pixelColor += rayColor(ray, seed);
