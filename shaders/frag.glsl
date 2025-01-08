@@ -196,22 +196,45 @@ struct Ray {
 };
 
 Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
-    // Calculate pixel deltas for x and y separately
-    vec2 pixelDelta = 1.0 / u_resolution;
+    // vertical field-of-view in degrees
+    float vfov = 90.0;
+    float focal_length = 1.0;
     
-    // Get random offset in [-0.5, 0.5] range
+    // Calculate viewport dimensions
+    float theta = radians(vfov);
+    float h = tan(theta/2.0);
+    float viewport_height = 2.0 * h * focal_length;
+    float viewport_width = viewport_height * (u_resolution.x/u_resolution.y);
+    
+    // Calculate viewport vectors
+    vec3 viewport_u = vec3(viewport_width, 0, 0);
+    vec3 viewport_v = vec3(0, -viewport_height, 0);
+    
+    // Calculate pixel delta vectors
+    vec3 pixel_delta_u = viewport_u / u_resolution.x;
+    vec3 pixel_delta_v = viewport_v / u_resolution.y;
+    
+    // Calculate upper left pixel location
+    vec3 viewport_upper_left = center 
+                              - vec3(0, 0, focal_length) 
+                              - viewport_u/2.0 
+                              - viewport_v/2.0;
+    vec3 pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+    
+    // Convert UV coordinates to pixel coordinates
+    vec2 pixel_coords = pixelCenter.xy * u_resolution;
+    
+    // Get random offset and calculate pixel sample position
     vec3 offset = sampleSquare(seed);
+    vec3 pixel_sample = pixel00_loc 
+                       + (pixel_coords.x + offset.x) * pixel_delta_u 
+                       + (pixel_coords.y + offset.y) * pixel_delta_v;
     
-    // Apply the properly scaled offset to the pixel center
-    vec3 pixelSample = pixelCenter + vec3(offset.xy * pixelDelta, 0.0);
+    vec3 ray_origin = center;
+    vec3 ray_direction = normalize(pixel_sample - ray_origin);
     
-    vec3 rayOrigin = center;
-
-    vec3 rayDirection = pixelSample - rayOrigin;
-
-    return Ray(rayOrigin, rayDirection);
+    return Ray(ray_origin, ray_direction);
 }
-
 
 struct HitRecord {
     vec3 p;
@@ -366,26 +389,21 @@ vec3 rayColor(Ray r, vec2 seed) {
 }
 
 void main() {
-    vec2 uv = pos.xy;
-    vec2 aspectRatio = vec2(u_resolution.x / u_resolution.y, 1.0);
-    uv *= aspectRatio / u_zoom;
-
-    vec3 pixelCenter = vec3(uv, pos.z);
-
-    float pixelSamplesScale = 1.0 / SAMPLES_PER_PIXEL;
-    vec3 pixelColor = vec3(0.0);
+    // Convert from [-1, 1] to [0, 1] and flip Y
+    vec2 uv = (pos.xy + 1.0) * 0.5;
+    uv.y = 1.0 - uv.y;  // Flip Y coordinate
     
-    for(int i = 0; i < SAMPLES_PER_PIXEL; i++) {
-
-        // Create a unique seed for each sample, pixel, and frame
-        vec2 seed = uv + vec2(float(i), u_time);
-        Ray ray = getRay(u_camera.center, pixelCenter, seed);
-
-        // Pass the unique seed to rayColor as well
-        pixelColor += rayColor(ray, seed);
+    vec2 center = vec2(0.5);
+    uv = center + (uv - center) / u_zoom;
+    
+    vec3 color = vec3(0.0);
+    
+    for(int s = 0; s < SAMPLES_PER_PIXEL; s++) {
+        vec2 seed = uv + vec2(float(s), u_time);
+        Ray r = getRay(u_camera.center, vec3(uv, 0.0), seed);
+        color += rayColor(r, seed);
     }
-
-    pixelColor *= pixelSamplesScale;
-
-    FragColor = vec4(linearToGammaVec3(pixelColor), 1.0);
+    
+    color /= float(SAMPLES_PER_PIXEL);
+    FragColor = vec4(linearToGammaVec3(color), 1.0);
 }
