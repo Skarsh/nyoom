@@ -48,18 +48,19 @@ MAX_SPHERES :: 5
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct #align (16) {
-	center:            Vec3,
-	world_up:          Vec3,
-	front:             Vec3,
-	up:                Vec3,
-	right:             Vec3,
+	center:                 Vec3,
+	world_up:               Vec3,
+	front:                  Vec3,
+	up:                     Vec3,
+	right:                  Vec3,
 	// euler angles
-	yaw:               f32,
-	pitch:             f32,
+	yaw:                    f32,
+	pitch:                  f32,
 	// camera options
-	movement_speed:    f32,
-	mouse_sensitivity: f32,
-	zoom:              f32,
+	movement_speed:         f32,
+	movement_sprint_factor: f32,
+	mouse_sensitivity:      f32,
+	zoom:                   f32,
 }
 
 App_State :: struct {
@@ -296,14 +297,15 @@ init :: proc(window: glfw.WindowHandle) {
 	app_state.zoom = 1.0
 	app_state.first_mouse = true
 	app_state.camera = Camera {
-		center            = Vec3{0, 0, 1},
-		up                = Vec3{0, 1, 0},
-		front             = Vec3{0, 0, -1},
-		world_up          = Vec3{0, 1, 0},
-		movement_speed    = 1.0,
-		yaw               = -90,
-		pitch             = 0,
-		mouse_sensitivity = 0.1,
+		center                 = Vec3{0, 0, 1},
+		up                     = Vec3{0, 1, 0},
+		front                  = Vec3{0, 0, -1},
+		world_up               = Vec3{0, 1, 0},
+		movement_speed         = 1.0,
+		movement_sprint_factor = 2.0,
+		yaw                    = -90,
+		pitch                  = 0,
+		mouse_sensitivity      = 0.1,
 	}
 }
 
@@ -333,6 +335,10 @@ update_camera_vectors :: proc(camera: ^Camera) {
 update :: proc(dt: f32) {
 	camera := &app_state.camera
 	camera_speed := dt * camera.movement_speed
+	if glfw.GetKey(app_state.window, glfw.KEY_LEFT_SHIFT) == glfw.PRESS {
+		camera_speed *= camera.movement_sprint_factor
+	}
+
 	if glfw.GetKey(app_state.window, glfw.KEY_W) == glfw.PRESS {
 		camera.center += camera_speed * camera.front
 	}
