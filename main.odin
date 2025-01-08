@@ -61,6 +61,16 @@ Camera :: struct #align (16) {
 	movement_sprint_factor: f32,
 	mouse_sensitivity:      f32,
 	zoom:                   f32,
+	// viewport parameters
+	vfov:                   f32,
+	viewport_width:         f32,
+	viewport_height:        f32,
+	viewport_u:             Vec3,
+	viewport_v:             Vec3,
+	pixel_delta_u:          Vec3,
+	pixel_delta_v:          Vec3,
+	viewport_upper_left:    Vec3,
+	pixel00_loc:            Vec3,
 }
 
 App_State :: struct {
@@ -277,19 +287,48 @@ main :: proc() {
 
 }
 
+// Modify set_camera_uniform to include the new viewport parameters
 set_camera_uniform :: proc(program: u32, camera: Camera) {
 	center_loc := gl.GetUniformLocation(program, "u_camera.center")
 	world_up_loc := gl.GetUniformLocation(program, "u_camera.worldUp")
 	front_loc := gl.GetUniformLocation(program, "u_camera.front")
 	up_loc := gl.GetUniformLocation(program, "u_camera.up")
 	right_loc := gl.GetUniformLocation(program, "u_camera.right")
+	viewport_u_loc := gl.GetUniformLocation(program, "u_camera.viewportU")
+	viewport_v_loc := gl.GetUniformLocation(program, "u_camera.viewportV")
+	pixel_delta_u_loc := gl.GetUniformLocation(program, "u_camera.pixelDeltaU")
+	pixel_delta_v_loc := gl.GetUniformLocation(program, "u_camera.pixelDeltaV")
+	viewport_upper_left_loc := gl.GetUniformLocation(program, "u_camera.viewportUpperLeft")
+	pixel00_loc := gl.GetUniformLocation(program, "u_camera.pixel00Loc")
 
 	gl.Uniform3f(center_loc, camera.center.x, camera.center.y, camera.center.z)
 	gl.Uniform3f(world_up_loc, camera.world_up.x, camera.world_up.y, camera.world_up.z)
 	gl.Uniform3f(front_loc, camera.front.x, camera.front.y, camera.front.z)
 	gl.Uniform3f(up_loc, camera.up.x, camera.up.y, camera.up.z)
 	gl.Uniform3f(right_loc, camera.right.x, camera.right.y, camera.right.z)
+	gl.Uniform3f(viewport_u_loc, camera.viewport_u.x, camera.viewport_u.y, camera.viewport_u.z)
+	gl.Uniform3f(viewport_v_loc, camera.viewport_v.x, camera.viewport_v.y, camera.viewport_v.z)
+	gl.Uniform3f(
+		pixel_delta_u_loc,
+		camera.pixel_delta_u.x,
+		camera.pixel_delta_u.y,
+		camera.pixel_delta_u.z,
+	)
+	gl.Uniform3f(
+		pixel_delta_v_loc,
+		camera.pixel_delta_v.x,
+		camera.pixel_delta_v.y,
+		camera.pixel_delta_v.z,
+	)
+	gl.Uniform3f(
+		viewport_upper_left_loc,
+		camera.viewport_upper_left.x,
+		camera.viewport_upper_left.y,
+		camera.viewport_upper_left.z,
+	)
+	gl.Uniform3f(pixel00_loc, camera.pixel00_loc.x, camera.pixel00_loc.y, camera.pixel00_loc.z)
 }
+
 
 init :: proc(window: glfw.WindowHandle) {
 	app_state.window = window
@@ -306,7 +345,31 @@ init :: proc(window: glfw.WindowHandle) {
 		yaw                    = -90,
 		pitch                  = 0,
 		mouse_sensitivity      = 0.1,
+		vfov                   = 90,
 	}
+}
+
+update_viewport_parameters :: proc(camera: ^Camera, window_width: i32, window_height: i32) {
+	aspect_ratio := f32(window_width) / f32(window_height)
+	theta := math.to_radians(camera.vfov)
+	h := math.tan(theta / 2.0)
+	viewport_height := 2.0 * h
+	viewport_width := viewport_height * aspect_ratio
+
+	camera.viewport_width = viewport_width
+	camera.viewport_height = viewport_height
+
+	camera.viewport_u = camera.viewport_width * camera.right
+	camera.viewport_v = camera.viewport_height * camera.up
+
+	camera.pixel_delta_u = camera.viewport_u / f32(window_width)
+	camera.pixel_delta_v = camera.viewport_v / f32(window_height)
+
+	camera.viewport_upper_left =
+		camera.center + camera.front - camera.viewport_u / 2.0 - camera.viewport_v / 2.0
+
+	camera.pixel00_loc =
+		camera.viewport_upper_left + 0.5 * (camera.pixel_delta_u + camera.pixel_delta_v)
 }
 
 update_camera_vectors :: proc(camera: ^Camera) {
@@ -321,15 +384,9 @@ update_camera_vectors :: proc(camera: ^Camera) {
 	camera.right = lin.normalize(lin.cross(camera.front, camera.world_up))
 	camera.up = lin.normalize(lin.cross(camera.right, camera.front))
 
-	// Apply FOV scaling
-	vfov: f32 = 90.0
-	aspect_ratio := f32(WINDOW_WIDTH) / f32(WINDOW_HEIGHT)
-	theta: f32 = math.to_radians(vfov)
-
-	// Scale the basis vectors by FOV
-	h: f32 = math.tan(theta / 2.0)
-	camera.right *= h * aspect_ratio
-	camera.up *= h
+	// Update viewport parameters with current window dimensions
+	width, height := glfw.GetWindowSize(app_state.window)
+	update_viewport_parameters(camera, width, height)
 }
 
 update :: proc(dt: f32) {
@@ -368,6 +425,8 @@ key_callback :: proc "c" (window: glfw.WindowHandle, key, scancode, action, mods
 
 size_callback :: proc "c" (window: glfw.WindowHandle, width, height: i32) {
 	gl.Viewport(0, 0, width, height)
+	context = runtime.default_context()
+	update_viewport_parameters(&app_state.camera, width, height)
 }
 
 scroll_callback :: proc "c" (window: glfw.WindowHandle, x_offset, y_offset: f64) {

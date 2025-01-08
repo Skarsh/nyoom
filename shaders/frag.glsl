@@ -20,6 +20,13 @@ struct Camera {
     vec3 front;
     vec3 up;
     vec3 right;
+    // Added viewport parameters
+    vec3 viewportU;
+    vec3 viewportV;
+    vec3 pixelDeltaU;
+    vec3 pixelDeltaV;
+    vec3 viewportUpperLeft;
+    vec3 pixel00Loc;
 };
 
 struct Material {
@@ -195,30 +202,14 @@ struct Ray {
 };
 
 Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
-    float viewport_size = 2.0;  // Make it square
-    
-    // Use camera vectors directly without additional aspect ratio
-    vec3 viewport_u = viewport_size * u_camera.right;
-    vec3 viewport_v = viewport_size * u_camera.up;
-    
-    // Rest of the function remains the same
-    vec3 pixel_delta_u = viewport_u / u_resolution.x;
-    vec3 pixel_delta_v = viewport_v / u_resolution.y;
-    
-    vec3 viewport_upper_left = center + u_camera.front 
-                              - viewport_u/2.0 
-                              - viewport_v/2.0;
-    
-    vec3 pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
-    
     // Convert UV coordinates to pixel coordinates
     vec2 pixel_coords = pixelCenter.xy * u_resolution;
     
     // Get random offset and calculate pixel sample position
     vec3 offset = sampleSquare(seed);
-    vec3 pixel_sample = pixel00_loc 
-                       + (pixel_coords.x + offset.x) * pixel_delta_u 
-                       + (pixel_coords.y + offset.y) * pixel_delta_v;
+    vec3 pixel_sample = u_camera.pixel00Loc 
+                       + (pixel_coords.x + offset.x) * u_camera.pixelDeltaU 
+                       + (pixel_coords.y + offset.y) * u_camera.pixelDeltaV;
     
     vec3 ray_origin = center;
     vec3 ray_direction = normalize(pixel_sample - ray_origin);
