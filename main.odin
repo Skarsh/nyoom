@@ -308,16 +308,26 @@ init :: proc(window: glfw.WindowHandle) {
 }
 
 update_camera_vectors :: proc(camera: ^Camera) {
+	// Convert Euler angles to direction vector
 	front := Vec3{}
-	front.x = math.cos(math.to_radians(camera.yaw) * math.cos(math.to_radians(camera.pitch)))
+	front.x = math.cos(math.to_radians(camera.yaw)) * math.cos(math.to_radians(camera.pitch))
 	front.y = math.sin(math.to_radians(camera.pitch))
-	front.z = math.sin(math.to_radians(camera.yaw) * math.cos(math.to_radians(camera.pitch)))
-	camera.front = lin.normalize(front)
-	fmt.println("front: ", camera.front)
+	front.z = math.sin(math.to_radians(camera.yaw)) * math.cos(math.to_radians(camera.pitch))
 
-	// also re-calculate the Right and Up vector
+	// Calculate camera basis vectors
+	camera.front = lin.normalize(front)
 	camera.right = lin.normalize(lin.cross(camera.front, camera.world_up))
 	camera.up = lin.normalize(lin.cross(camera.right, camera.front))
+
+	// Apply FOV scaling
+	vfov: f32 = 90.0
+	aspect_ratio := f32(WINDOW_WIDTH) / f32(WINDOW_HEIGHT)
+	theta: f32 = math.to_radians(vfov)
+
+	// Scale the basis vectors by FOV
+	h: f32 = math.tan(theta / 2.0)
+	camera.right *= h * aspect_ratio
+	camera.up *= h
 }
 
 update :: proc(dt: f32) {

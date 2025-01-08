@@ -195,35 +195,20 @@ struct Ray {
 };
 
 Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
-    // vertical field-of-view in degrees
-    float vfov = 90.0;
-    //float focal_length = length(center - u_camera.front);
-    float focal_length = 1.0;
+    float viewport_size = 2.0;  // Make it square
     
-    // Calculate viewport dimensions
-    float theta = radians(vfov);
-    float h = tan(theta/2.0);
-    float viewport_height = 2.0 * h * focal_length;
-    float viewport_width = viewport_height * (u_resolution.x/u_resolution.y);
+    // Use camera vectors directly without additional aspect ratio
+    vec3 viewport_u = viewport_size * u_camera.right;
+    vec3 viewport_v = viewport_size * u_camera.up;
     
-    //vec3 w = normalize(center - u_camera.front);
-    vec3 w = -normalize(u_camera.front);
-    vec3 u = normalize(cross(u_camera.worldUp, w));
-    vec3 v = normalize(cross(w, u));
-
-    // Calculate viewport vectors
-    //vec3 viewport_u = vec3(viewport_width, 0, 0);
-    vec3 viewport_u = viewport_width * u;
-    //vec3 viewport_v = vec3(0, -viewport_height, 0);
-    vec3 viewport_v = viewport_height * -v;
-    
-    // Calculate pixel delta vectors
+    // Rest of the function remains the same
     vec3 pixel_delta_u = viewport_u / u_resolution.x;
     vec3 pixel_delta_v = viewport_v / u_resolution.y;
     
-
-    vec3 viewport_upper_left = center - (focal_length * w) - viewport_u / 2.0 - viewport_v / 2.0;
-
+    vec3 viewport_upper_left = center + u_camera.front 
+                              - viewport_u/2.0 
+                              - viewport_v/2.0;
+    
     vec3 pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
     
     // Convert UV coordinates to pixel coordinates
@@ -396,7 +381,6 @@ vec3 rayColor(Ray r, vec2 seed) {
 void main() {
     // Convert from [-1, 1] to [0, 1] and flip Y
     vec2 uv = (pos.xy + 1.0) * 0.5;
-    uv.y = 1.0 - uv.y;  // Flip Y coordinate
     
     vec2 center = vec2(0.5);
     uv = center + (uv - center) / u_zoom;
