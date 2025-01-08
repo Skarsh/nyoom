@@ -47,7 +47,7 @@ Sphere :: struct {
 MAX_SPHERES :: 5
 spheres: [MAX_SPHERES]Sphere
 
-Camera :: struct {
+Camera :: struct #align (16) {
 	center:            Vec3,
 	world_up:          Vec3,
 	front:             Vec3,
@@ -63,10 +63,13 @@ Camera :: struct {
 }
 
 App_State :: struct {
-	window:  glfw.WindowHandle,
-	running: bool,
-	zoom:    f32,
-	camera:  Camera,
+	window:       glfw.WindowHandle,
+	running:      bool,
+	zoom:         f32,
+	last_mouse_x: f32,
+	last_mouse_y: f32,
+	first_mouse:  bool,
+	camera:       Camera,
 }
 
 app_state: App_State
@@ -108,6 +111,12 @@ main :: proc() {
 	glfw.SetScrollCallback(window, scroll_callback)
 
 	glfw.SetFramebufferSizeCallback(window, size_callback)
+
+	// Hide and capture the cursor
+	glfw.SetInputMode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
+
+	// Set the mouse callback
+	glfw.SetCursorPosCallback(window, mouse_callback)
 
 	gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
@@ -269,7 +278,6 @@ main :: proc() {
 
 set_camera_uniform :: proc(program: u32, camera: Camera) {
 	center_loc := gl.GetUniformLocation(program, "u_camera.center")
-	look_at_loc := gl.GetUniformLocation(program, "u_camera.lookAt")
 	world_up_loc := gl.GetUniformLocation(program, "u_camera.worldUp")
 	front_loc := gl.GetUniformLocation(program, "u_camera.front")
 	up_loc := gl.GetUniformLocation(program, "u_camera.up")
@@ -286,11 +294,16 @@ init :: proc(window: glfw.WindowHandle) {
 	app_state.window = window
 	app_state.running = true
 	app_state.zoom = 1.0
+	app_state.first_mouse = true
 	app_state.camera = Camera {
-		center         = Vec3{0, 0, 1},
-		up             = Vec3{0, 1, 0},
-		front          = Vec3{0, 0, -1},
-		movement_speed = 1.0,
+		center            = Vec3{0, 0, 1},
+		up                = Vec3{0, 1, 0},
+		front             = Vec3{0, 0, -1},
+		world_up          = Vec3{0, 1, 0},
+		movement_speed    = 1.0,
+		yaw               = -90,
+		pitch             = 0,
+		mouse_sensitivity = 0.1,
 	}
 }
 
@@ -300,6 +313,7 @@ update_camera_vectors :: proc(camera: ^Camera) {
 	front.y = math.sin(math.to_radians(camera.pitch))
 	front.z = math.sin(math.to_radians(camera.yaw) * math.cos(math.to_radians(camera.pitch)))
 	camera.front = lin.normalize(front)
+	fmt.println("front: ", camera.front)
 
 	// also re-calculate the Right and Up vector
 	camera.right = lin.normalize(lin.cross(camera.front, camera.world_up))
@@ -321,6 +335,8 @@ update :: proc(dt: f32) {
 	if glfw.GetKey(app_state.window, glfw.KEY_D) == glfw.PRESS {
 		camera.center += camera_speed * lin.normalize(lin.cross(camera.front, camera.up))
 	}
+
+	update_camera_vectors(camera)
 }
 
 draw :: proc() {
@@ -353,4 +369,38 @@ scroll_callback :: proc "c" (window: glfw.WindowHandle, x_offset, y_offset: f64)
 error_callback :: proc "c" (error: i32, description: cstring) {
 	context = runtime.default_context()
 	log.error(description)
+}
+
+mouse_callback :: proc "c" (window: glfw.WindowHandle, xpos, ypos: f64) {
+	context = runtime.default_context()
+
+	x_pos: f32 = f32(xpos)
+	y_pos: f32 = f32(ypos)
+
+	if app_state.first_mouse {
+		app_state.last_mouse_x = x_pos
+		app_state.last_mouse_y = y_pos
+		app_state.first_mouse = false
+		return
+	}
+
+	x_offset := x_pos - app_state.last_mouse_x
+	// Reversed since y-coordinates go from bottom to top
+	y_offset := app_state.last_mouse_y - y_pos
+
+	app_state.last_mouse_x = x_pos
+	app_state.last_mouse_y = y_pos
+
+	camera := &app_state.camera
+	x_offset *= camera.mouse_sensitivity
+	y_offset *= camera.mouse_sensitivity
+
+	camera.yaw += f32(x_offset)
+	camera.pitch += f32(y_offset)
+
+	// Constrain the pitch to avoid flipping
+	if camera.pitch > 89.0 do camera.pitch = 89.0
+	if camera.pitch < -89.0 do camera.pitch = -89.0
+
+	update_camera_vectors(camera)
 }

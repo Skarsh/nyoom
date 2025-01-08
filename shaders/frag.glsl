@@ -16,7 +16,6 @@ out vec4 FragColor;
 
 struct Camera {
     vec3 center;
-    vec3 lookAt;
     vec3 worldUp;
     vec3 front;
     vec3 up;
@@ -198,6 +197,7 @@ struct Ray {
 Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
     // vertical field-of-view in degrees
     float vfov = 90.0;
+    //float focal_length = length(center - u_camera.front);
     float focal_length = 1.0;
     
     // Calculate viewport dimensions
@@ -206,19 +206,24 @@ Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
     float viewport_height = 2.0 * h * focal_length;
     float viewport_width = viewport_height * (u_resolution.x/u_resolution.y);
     
+    //vec3 w = normalize(center - u_camera.front);
+    vec3 w = -normalize(u_camera.front);
+    vec3 u = normalize(cross(u_camera.worldUp, w));
+    vec3 v = normalize(cross(w, u));
+
     // Calculate viewport vectors
-    vec3 viewport_u = vec3(viewport_width, 0, 0);
-    vec3 viewport_v = vec3(0, -viewport_height, 0);
+    //vec3 viewport_u = vec3(viewport_width, 0, 0);
+    vec3 viewport_u = viewport_width * u;
+    //vec3 viewport_v = vec3(0, -viewport_height, 0);
+    vec3 viewport_v = viewport_height * -v;
     
     // Calculate pixel delta vectors
     vec3 pixel_delta_u = viewport_u / u_resolution.x;
     vec3 pixel_delta_v = viewport_v / u_resolution.y;
     
-    // Calculate upper left pixel location
-    vec3 viewport_upper_left = center 
-                              - vec3(0, 0, focal_length) 
-                              - viewport_u/2.0 
-                              - viewport_v/2.0;
+
+    vec3 viewport_upper_left = center - (focal_length * w) - viewport_u / 2.0 - viewport_v / 2.0;
+
     vec3 pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
     
     // Convert UV coordinates to pixel coordinates
