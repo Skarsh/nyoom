@@ -45,7 +45,7 @@ Sphere :: struct {
 	radius: f32,
 }
 
-MAX_SPHERES :: 29
+MAX_SPHERES :: 13
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct #align (16) {

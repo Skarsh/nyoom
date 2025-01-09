@@ -97,17 +97,20 @@ vec3 randVec3(float min, float max, vec2 seed) {
     return min + (max - min) * r;
 }
 
-// TODO(Thomas): Why is all this math necessary, isn't the randomness of rand good enough?
 vec3 randUnitVector(vec2 seed) {
-    float u = rand(seed);
-    float v = rand(seed + vec2(1.0, 0.0));
-    float theta = 2.0 * 3.14159265359 * u;
-    float phi = acos(2.0 * v - 1.0);
+    // Get two random values in [0,1)
+    float r1 = rand(seed);
+    float r2 = rand(seed + vec2(1.0, 0.0)); // Offset seed for second random number
+    
+    float z = 2.0 * r1 - 1.0;      // z in [-1,1]
+    float phi = 2.0 * PI * r2;     // azimuthal angle in [0, 2PI]
+    
+    float r = sqrt(1.0 - z*z);     // radius in x-y plane
     
     return vec3(
-        sin(phi) * cos(theta),
-        sin(phi) * sin(theta),
-        cos(phi)
+        r * cos(phi),
+        r * sin(phi),
+        z
     );
 }
 
@@ -234,13 +237,12 @@ bool metalScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenu
 }
 
 bool dielectricScatter(Material material, Ray rayIn, HitRecord rec, inout vec3 attenuation, inout Ray scattered, vec2 seed) {
-    attenuation = vec3(1.0, 1.0, 1.0);
+    attenuation = vec3(1.0);
     float ri = rec.frontFace ? (1.0 / material.refractionIndex) : material.refractionIndex;
     
     vec3 unitDirection = normalize(rayIn.dir);
-
     float cosTheta = min(dot(-unitDirection, rec.normal), 1.0);
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    float sinTheta = sqrt(1.0 - (cosTheta * cosTheta));
 
     bool cannotRefract = ri * sinTheta > 1.0;
     vec3 direction;
