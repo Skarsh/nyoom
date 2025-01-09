@@ -6,6 +6,7 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import lin "core:math/linalg"
+import "core:math/rand"
 import gl "vendor:OpenGL"
 import "vendor:glfw"
 
@@ -44,7 +45,7 @@ Sphere :: struct {
 	radius: f32,
 }
 
-MAX_SPHERES :: 5
+MAX_SPHERES :: 29
 spheres: [MAX_SPHERES]Sphere
 
 Camera :: struct #align (16) {
@@ -71,6 +72,10 @@ Camera :: struct #align (16) {
 	pixel_delta_v:          Vec3,
 	viewport_upper_left:    Vec3,
 	pixel00_loc:            Vec3,
+	defocus_disk_u:         Vec3,
+	defocus_disk_v:         Vec3,
+	defocus_angle:          f32,
+	focus_dist:             f32,
 }
 
 App_State :: struct {
@@ -178,60 +183,108 @@ main :: proc() {
 
 	gl.EnableVertexAttribArray(0)
 
+	sphere_index := 0
+
 	material_ground := Material {
 		type   = .Lambertian,
-		albedo = Vec3{0.8, 0.8, 0.0},
+		albedo = Vec3{0.5, 0.5, 0.5},
 	}
 
-	material_center := Material {
-		type   = .Lambertian,
-		albedo = Vec3{0.1, 0.2, 0.5},
+	spheres[sphere_index] = Sphere {
+		mat    = material_ground,
+		center = Vec3{0, -1000, 0},
+		radius = 1000,
 	}
 
-	material_left := Material {
+	sphere_index += 1
+
+	for a in -1 ..< 1 {
+		for b in -1 ..< 1 {
+			choose_mat := rand.float64()
+			center := Vec3{f32(a) + 0.9 * rand.float32(), 0.2, f32(b) + 0.9 * rand.float32()}
+
+			if lin.length(center - Vec3{4, 0.02, 0}) > 0.9 {
+				sphere_material: Material
+
+				if choose_mat < 0.8 {
+					// diffuse
+					albedo := random_vec3() * random_vec3()
+					sphere_material = Material {
+						type   = .Lambertian,
+						albedo = albedo,
+					}
+					spheres[sphere_index] = Sphere {
+						mat    = sphere_material,
+						center = center,
+						radius = 0.2,
+					}
+				} else if (choose_mat < 0.95) {
+					// metal
+					albedo := random_vec3_range(0.5, 1)
+					fuzz := rand.float32_range(0, 0.5)
+					sphere_material = Material {
+						type   = .Metal,
+						albedo = albedo,
+						fuzz   = fuzz,
+					}
+					spheres[sphere_index] = Sphere {
+						mat    = sphere_material,
+						center = center,
+						radius = 0.2,
+					}
+				} else {
+					// glass
+					sphere_material = Material {
+						type            = .Dielectric,
+						refractionIndex = 1.5,
+					}
+					spheres[sphere_index] = Sphere {
+						mat    = sphere_material,
+						center = center,
+						radius = 0.2,
+					}
+				}
+			}
+			sphere_index += 1
+		}
+	}
+
+	material1 := Material {
 		type            = .Dielectric,
 		refractionIndex = 1.50,
 	}
 
-	material_bubble := Material {
-		type            = .Dielectric,
-		refractionIndex = 1.00 / 1.50,
+	spheres[sphere_index] = Sphere {
+		mat    = material1,
+		center = Vec3{0, 1, 0},
+		radius = 1.0,
 	}
 
-	material_right := Material {
+	sphere_index += 1
+
+	material2 := Material {
+		type   = .Lambertian,
+		albedo = Vec3{0.4, 0.2, 0.1},
+	}
+
+	spheres[sphere_index] = Sphere {
+		mat    = material2,
+		center = Vec3{-4, 1, 0},
+		radius = 1.0,
+	}
+
+	sphere_index += 1
+
+	material3 := Material {
 		type   = .Metal,
-		albedo = Vec3{0.8, 0.6, 0.2},
-		fuzz   = 1.0,
+		albedo = Vec3{0.7, 0.6, 0.5},
+		fuzz   = 0.0,
 	}
 
-	spheres[0] = Sphere {
-		mat    = material_ground,
-		center = Vec3{0.0, -100.5, -0.5},
-		radius = 100,
-	}
-
-	spheres[1] = Sphere {
-		mat    = material_center,
-		center = Vec3{0, 0.0, -0.2},
-		radius = 0.5,
-	}
-
-	spheres[2] = Sphere {
-		mat    = material_left,
-		center = Vec3{-1, 0.0, 0.0},
-		radius = 0.5,
-	}
-
-	spheres[3] = Sphere {
-		mat    = material_bubble,
-		center = Vec3{-1, 0.0, 0.0},
-		radius = 0.4,
-	}
-
-	spheres[4] = Sphere {
-		mat    = material_right,
-		center = Vec3{1, 0.0, 0.0},
-		radius = 0.5,
+	spheres[sphere_index] = Sphere {
+		mat    = material3,
+		center = Vec3{4, 1, 0},
+		radius = 1.0,
 	}
 
 	// setup Uniform Buffer Object for spheres
@@ -300,6 +353,9 @@ set_camera_uniform :: proc(program: u32, camera: Camera) {
 	pixel_delta_v_loc := gl.GetUniformLocation(program, "u_camera.pixelDeltaV")
 	viewport_upper_left_loc := gl.GetUniformLocation(program, "u_camera.viewportUpperLeft")
 	pixel00_loc := gl.GetUniformLocation(program, "u_camera.pixel00Loc")
+	defocus_disk_u_loc := gl.GetUniformLocation(program, "u_camera.defocusDiskU")
+	defocus_disk_v_loc := gl.GetUniformLocation(program, "u_camera.defocusDiskV")
+	defocus_disk_angle_loc := gl.GetUniformLocation(program, "u_camera.defocusDiskAngle")
 
 	gl.Uniform3f(center_loc, camera.center.x, camera.center.y, camera.center.z)
 	gl.Uniform3f(world_up_loc, camera.world_up.x, camera.world_up.y, camera.world_up.z)
@@ -327,6 +383,19 @@ set_camera_uniform :: proc(program: u32, camera: Camera) {
 		camera.viewport_upper_left.z,
 	)
 	gl.Uniform3f(pixel00_loc, camera.pixel00_loc.x, camera.pixel00_loc.y, camera.pixel00_loc.z)
+	gl.Uniform3f(
+		defocus_disk_u_loc,
+		camera.defocus_disk_u.x,
+		camera.defocus_disk_u.y,
+		camera.defocus_disk_u.z,
+	)
+	gl.Uniform3f(
+		defocus_disk_v_loc,
+		camera.defocus_disk_v.x,
+		camera.defocus_disk_v.y,
+		camera.defocus_disk_v.z,
+	)
+	gl.Uniform1f(defocus_disk_angle_loc, camera.defocus_angle)
 }
 
 
@@ -346,6 +415,8 @@ init :: proc(window: glfw.WindowHandle) {
 		pitch                  = 0,
 		mouse_sensitivity      = 0.1,
 		vfov                   = 90,
+		defocus_angle          = 10,
+		focus_dist             = 3.4,
 	}
 }
 
@@ -353,7 +424,7 @@ update_viewport_parameters :: proc(camera: ^Camera, window_width: i32, window_he
 	aspect_ratio := f32(window_width) / f32(window_height)
 	theta := math.to_radians(camera.vfov)
 	h := math.tan(theta / 2.0)
-	viewport_height := 2.0 * h
+	viewport_height := 2.0 * h * camera.focus_dist
 	viewport_width := viewport_height * aspect_ratio
 
 	camera.viewport_width = viewport_width
@@ -366,10 +437,17 @@ update_viewport_parameters :: proc(camera: ^Camera, window_width: i32, window_he
 	camera.pixel_delta_v = camera.viewport_v / f32(window_height)
 
 	camera.viewport_upper_left =
-		camera.center + camera.front - camera.viewport_u / 2.0 - camera.viewport_v / 2.0
+		camera.center +
+		(camera.focus_dist * camera.front) -
+		camera.viewport_u / 2.0 -
+		camera.viewport_v / 2.0
 
 	camera.pixel00_loc =
 		camera.viewport_upper_left + 0.5 * (camera.pixel_delta_u + camera.pixel_delta_v)
+
+	defocus_radius := camera.focus_dist * math.tan(math.to_radians(camera.defocus_angle) / 2.0)
+	camera.defocus_disk_u = camera.right * defocus_radius
+	camera.defocus_disk_v = camera.up * defocus_radius
 }
 
 update_camera_vectors :: proc(camera: ^Camera) {
@@ -478,4 +556,16 @@ mouse_callback :: proc "c" (window: glfw.WindowHandle, xpos, ypos: f64) {
 	if camera.pitch < -89.0 do camera.pitch = -89.0
 
 	update_camera_vectors(camera)
+}
+
+random_vec3 :: proc() -> Vec3 {
+	return Vec3{rand.float32(), rand.float32(), rand.float32()}
+}
+
+random_vec3_range :: proc(min: f32, max: f32) -> Vec3 {
+	return Vec3 {
+		rand.float32_range(min, max),
+		rand.float32_range(min, max),
+		rand.float32_range(min, max),
+	}
 }

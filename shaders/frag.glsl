@@ -3,7 +3,7 @@
 #define INF 1.0 / 0.0
 #define PI 3.14159265
 
-#define MAX_SPHERES 5
+#define MAX_SPHERES 13
 #define MAX_BOUNCES 10
 #define SAMPLES_PER_PIXEL 100
 
@@ -27,6 +27,9 @@ struct Camera {
     vec3 pixelDeltaV;
     vec3 viewportUpperLeft;
     vec3 pixel00Loc;
+    vec3 defocusDiskU;
+    vec3 defocusDiskV;
+    float defocusAngle;
 };
 
 struct Material {
@@ -94,6 +97,7 @@ vec3 randVec3(float min, float max, vec2 seed) {
     return min + (max - min) * r;
 }
 
+// TODO(Thomas): Why is all this math necessary, isn't the randomness of rand good enough?
 vec3 randUnitVector(vec2 seed) {
     float u = rand(seed);
     float v = rand(seed + vec2(1.0, 0.0));
@@ -107,38 +111,21 @@ vec3 randUnitVector(vec2 seed) {
     );
 }
 
-// Basic rejection sampling method
-vec3 sampleHemisphere(vec3 normal, vec2 seed)
-{
-    vec3 vec = normalize(
-        vec3(
-            rand(seed)*2.0-1.0,
-            rand(seed.yx+vec2(1.123123123,2.545454))*2.0-1.0,
-            rand(seed-vec2(9.21428,7.43163431))*2.0-1.0
-        )
-    );
 
-	if (dot(vec, normal) < 0.0) vec *= -1; 
-
-	return vec;
+// TODO(Thomas): Why is all this math necessary, isn't the randomness of rand good enough?
+vec3 randInUnitDisk(vec2 seed) {
+    float u = rand(-1.0, 1.0, seed);
+    float v = rand(-1.0, 1.0, seed + vec2(1.0, 0.0));
+    float theta = 2.0 * 3.14159265359 * u;
+    float phi = acos(2.0 * v - 1.0);
+    
+    return vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), 0.0);
 }
 
-vec3 hemisphereRejection(vec3 normal, vec2 seed) {
-    vec3 randomVec = vec3(
-        rand(seed) * 2.0 - 1.0,
-        rand(seed) * (2.0 - 1.0) * 2.0,
-        rand(seed) * (2.0 - 1.0) * 3.0
-    );
-    vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-    vec3 bitangent = cross(normal, tangent);
-    float r = rand(seed * 4.0);
-    float theta = 2.0 * 3.14159265359 * rand(seed * 5.0);
-    float r_sqrt = sqrt(r);
-    return normalize(
-        r_sqrt * cos(theta) * tangent +
-        r_sqrt * sin(theta) * bitangent +
-        sqrt(1.0 - r) * normal
-    );
+// Returns a random point in camera defoucs disk
+vec3 defocusDiskSample(vec2 seed) {
+    vec3 p = randInUnitDisk(seed);
+    return u_camera.center + (p.x * u_camera.defocusDiskU) + (p.y * u_camera.defocusDiskV);
 }
 
 vec3 reflect(vec3 v, vec3 n) {
@@ -211,7 +198,8 @@ Ray getRay(vec3 center, vec3 pixelCenter, vec2 seed) {
                        + (pixel_coords.x + offset.x) * u_camera.pixelDeltaU 
                        + (pixel_coords.y + offset.y) * u_camera.pixelDeltaV;
     
-    vec3 ray_origin = center;
+    //vec3 ray_origin = ()center;
+    vec3 ray_origin = (u_camera.defocusAngle <= 0 ) ? center : defocusDiskSample(seed);
     vec3 ray_direction = normalize(pixel_sample - ray_origin);
     
     return Ray(ray_origin, ray_direction);
@@ -334,6 +322,7 @@ vec3 rayColor(Ray r, vec2 seed) {
     Ray ray = r;
     vec3 accumulatedColor = vec3(1.0);
     HitRecord rec;
+    rec.t = INF;
     
     for (int depth = 0; depth < MAX_BOUNCES; depth++) {
         if (hit(ray, interval(0.001, INF), rec)) {
@@ -370,7 +359,7 @@ vec3 rayColor(Ray r, vec2 seed) {
 }
 
 void main() {
-    // Convert from [-1, 1] to [0, 1] and flip Y
+    // Convert from [-1, 1] to [0, 1]
     vec2 uv = (pos.xy + 1.0) * 0.5;
     
     vec2 center = vec2(0.5);
