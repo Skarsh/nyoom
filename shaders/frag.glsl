@@ -323,41 +323,39 @@ bool hit(Ray ray, Interval rayInterval, inout HitRecord rec) {
 vec3 rayColor(Ray r, vec2 seed) {
     Ray ray = r;
     vec3 accumulatedColor = vec3(1.0);
-    HitRecord rec;
-    rec.t = INF;
     
     for (int depth = 0; depth < MAX_BOUNCES; depth++) {
+        HitRecord rec;
         if (hit(ray, interval(0.001, INF), rec)) {
             Ray scattered;
             vec3 attenuation;
+            bool did_scatter = false;
             
             if (rec.mat.type == MATERIAL_LAMBERTIAN) {
-                if (lambertianScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
-                    accumulatedColor *= attenuation;
-                    ray = scattered;
-                    continue;
-                }
+                did_scatter = lambertianScatter(rec.mat, ray, rec, attenuation, scattered, seed);
             } else if (rec.mat.type == MATERIAL_METAL) {
-                if (metalScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
-                    accumulatedColor *= attenuation;
-                    ray = scattered;
-                    continue;
-                }
+                did_scatter = metalScatter(rec.mat, ray, rec, attenuation, scattered, seed);
             } else if(rec.mat.type == MATERIAL_DIELECTRIC) {
-                if (dielectricScatter(rec.mat, ray, rec, attenuation, scattered, seed)) {
-                    accumulatedColor *= attenuation;
-                    ray = scattered;
-                    continue;
-                }
+                did_scatter = dielectricScatter(rec.mat, ray, rec, attenuation, scattered, seed);
+            }
+            
+            if (did_scatter) {
+                accumulatedColor *= attenuation;
+                ray = scattered;
+                continue;
             }
             return vec3(0.0);
         }
+        
+        // Ray didn't hit anything - return background color
+        vec3 unit_direction = normalize(ray.dir);
+        float a = 0.5 * (unit_direction.y + 1.0);
+        vec3 background = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
+        return accumulatedColor * background;
     }
     
-    vec3 unit_direction = normalize(ray.dir);
-    float a = 0.5 * (unit_direction.y + 1.0);
-    vec3 background = (1.0-a)*vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0);
-    return accumulatedColor * background;
+    // Exceeded bounce limit
+    return vec3(0.0);
 }
 
 void main() {
