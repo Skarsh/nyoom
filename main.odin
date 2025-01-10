@@ -405,7 +405,7 @@ init :: proc(window: glfw.WindowHandle) {
 	app_state.zoom = 1.0
 	app_state.first_mouse = true
 	app_state.camera = Camera {
-		center                 = Vec3{0, 0, 1},
+		center                 = Vec3{0, 2, 3},
 		up                     = Vec3{0, 1, 0},
 		front                  = Vec3{0, 0, -1},
 		world_up               = Vec3{0, 1, 0},
